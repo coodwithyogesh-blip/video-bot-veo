@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+*.json
+!service-account.example.json
+__pycache__/
+.pytest_cache/
+*.py[cod]
+.venv/
+venv/
+*.mp4
+*.log
