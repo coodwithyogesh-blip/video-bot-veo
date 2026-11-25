@@ -92,6 +92,15 @@ async def setgeneral(u,c):
     db(c).set_setting(key,c.args[0])
     await u.effective_message.reply_text(f"{key} updated. Note: welcome credit change applies to new users only.")
 
+async def users_command(u,c):
+    if not owner_ok(u,c): return await u.effective_message.reply_text("Access denied.")
+    with db(c).connect() as conn:
+        rows=conn.execute("SELECT user_id,username,credits FROM users ORDER BY created_at DESC LIMIT 30").fetchall()
+    if not rows: return await u.effective_message.reply_text("No users yet.")
+    lines=["Latest users (max 30):"]
+    lines.extend(f"{r['user_id']} | @{r['username']} | {r['credits']} credits" for r in rows)
+    await u.effective_message.reply_text("\\n".join(lines))
+
 async def user_command(u,c):
     if not owner_ok(u,c): return await u.effective_message.reply_text("Access denied.")
     if len(c.args)!=1 or not c.args[0].isdigit(): return await u.effective_message.reply_text("Usage: /user TELEGRAM_USER_ID")
@@ -127,7 +136,7 @@ async def callbacks(u,c):
         else: c.user_data["awaiting"]="proof"; await q.message.reply_text("Ab payment screenshot upload karo.")
     elif data=="owner:stats": await q.message.reply_text(str(db(c).stats()))
     elif data=="owner:settings":
-        await q.message.reply_text("Commands: /setupi UPI_ID, /setprice 99, /setshortcost 50, /setlongcost 75, /setsubcredits 500, /setsubdays 30, /addcredits USER_ID AMOUNT. QR photo caption /setqr.")
+        await q.message.reply_text("Commands: /setupi UPI_ID, /setprice 99, /setshortcost 50, /setlongcost 75, /setshortseconds 8, /setlongminutes 3, /setwelcome 200, /setsubcredits 500, /setsubdays 30, /users, /user USER_ID, /addcredits USER_ID AMOUNT. QR photo caption /setqr.")
     elif data=="owner:payments":
         rows=db(c).pending_payments()
         if not rows: return await q.message.reply_text("No pending payments.")
@@ -175,7 +184,7 @@ async def texts(u,c):
     prompt=msg.text.strip()
     if len(prompt)<5 or len(prompt)>1500: return await msg.reply_text("Prompt 5–1500 characters ka hona chahiye.")
     s=c.application.bot_data["settings"]; mode=c.user_data.get("video_mode","short")
-    seconds=s.short_video_seconds if mode=="short" else s.long_video_minutes*60
+    seconds=int(setting(c,"short_video_seconds",s.short_video_seconds)) if mode=="short" else int(setting(c,"long_video_minutes",s.long_video_minutes))*60
     cost=int(setting(c,"short_video_credits",s.short_video_credits) if mode=="short" else setting(c,"long_video_credits",s.long_video_credits))
     db(c).ensure_user(user.id,user.username or "",user.first_name or "")
     free=owner_ok(u,c)
