@@ -2,6 +2,7 @@ import os, asyncio
 from datetime import datetime, timezone
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
+from telegram.error import BadRequest
 from config import is_owner
 from video_generator import generate_video
 
@@ -121,7 +122,15 @@ async def addcredits(u,c):
     except Exception as e: await u.effective_message.reply_text(f"Error: {e}")
 
 async def callbacks(u,c):
-    q=u.callback_query; await q.answer(); data=q.data or ""
+    q=u.callback_query
+    if not q: return
+    # Telegram callback IDs expire; an expired spinner answer must not crash the handler.
+    try:
+        await q.answer()
+    except BadRequest as exc:
+        if "too old" not in str(exc).lower() and "query id is invalid" not in str(exc).lower():
+            raise
+    data=q.data or ""
     if data.startswith(("owner:","payok:","payno:")) and not owner_ok(u,c):
         return await q.edit_message_text("Access denied.")
     if data.startswith("duration:"):
