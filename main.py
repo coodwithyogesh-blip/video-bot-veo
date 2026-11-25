@@ -3,7 +3,7 @@ from telegram.ext import Application,CommandHandler,CallbackQueryHandler,Message
 from config import load_settings
 from database import Database
 from sheets import SheetsLogger
-from handlers import start_command,help_command,balance_command,buy_command,owner_command,setprice,setupi,setcost,setplan,setgeneral,user_command,addcredits,callbacks,photos,texts
+from handlers import start_command,help_command,balance_command,buy_command,owner_command,setprice,setupi,setcost,setplan,setgeneral,user_command,users_command,addcredits,callbacks,photos,texts
 
 logging.basicConfig(level=logging.INFO,format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -15,7 +15,7 @@ def main():
     for command,fn in [("start",start_command),("help",help_command),("balance",balance_command),
         ("buy",buy_command),("owner",owner_command),("setprice",setprice),("setupi",setupi),
         ("setshortcost",setcost),("setlongcost",setcost),("setsubcredits",setplan),
-        ("setsubdays",setplan),("setwelcome",setgeneral),("setshortseconds",setgeneral),("setlongminutes",setgeneral),("user",user_command),("addcredits",addcredits)]:
+        ("setsubdays",setplan),("setwelcome",setgeneral),("setshortseconds",setgeneral),("setlongminutes",setgeneral),("user",user_command),("users",users_command),("addcredits",addcredits)]:
         app.add_handler(CommandHandler(command,fn))
     app.add_handler(CallbackQueryHandler(callbacks))
     app.add_handler(MessageHandler(filters.PHOTO,photos))
