@@ -10,3 +10,7 @@ __pycache__/
 venv/
 *.mp4
 *.log
+service-account.json
+payment_qr.*
+*.sqlite3
+generated_videos/
