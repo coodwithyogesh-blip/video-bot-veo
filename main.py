@@ -1,27 +1,26 @@
 import logging
-from telegram.ext import Application, CommandHandler
-
+from telegram.ext import Application,CommandHandler,CallbackQueryHandler,MessageHandler,filters
 from config import load_settings
-from handlers import start_command, help_command, owner_command
+from database import Database
+from sheets import SheetsLogger
+from handlers import start_command,help_command,balance_command,buy_command,owner_command,setprice,setupi,setcost,setplan,addcredits,callbacks,photos,texts
 
-logging.basicConfig(
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    level=logging.INFO,
-)
+logging.basicConfig(level=logging.INFO,format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
+def main():
+    s=load_settings()
+    app=Application.builder().token(s.telegram_bot_token).build()
+    app.bot_data.update({"settings":s,"db":Database(s.database_path,s.welcome_credits),
+                         "sheets":SheetsLogger(s.google_sheet_id,s.google_credentials)})
+    for command,fn in [("start",start_command),("help",help_command),("balance",balance_command),
+        ("buy",buy_command),("owner",owner_command),("setprice",setprice),("setupi",setupi),
+        ("setshortcost",setcost),("setlongcost",setcost),("setsubcredits",setplan),
+        ("setsubdays",setplan),("addcredits",addcredits)]:
+        app.add_handler(CommandHandler(command,fn))
+    app.add_handler(CallbackQueryHandler(callbacks))
+    app.add_handler(MessageHandler(filters.PHOTO,photos))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND,texts))
+    logging.info("TIWARI AI VIDEO CREATOR starting")
+    app.run_polling()
 
-def main() -> None:
-    settings = load_settings()
-    app = Application.builder().token(settings.telegram_bot_token).build()
-    app.bot_data["settings"] = settings
-
-    app.add_handler(CommandHandler("start", start_command))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("owner", owner_command))
-
-    logging.info("TIWARI AI VIDEO CREATOR is starting")
-    app.run_polling(allowed_updates=["message", "callback_query"])
-
-
-if __name__ == "__main__":
-    main()
+if __name__=="__main__": main()
