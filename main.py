@@ -6,6 +6,8 @@ from sheets import SheetsLogger
 from handlers import start_command,help_command,balance_command,buy_command,owner_command,setprice,setupi,setcost,setplan,setgeneral,user_command,users_command,addcredits,callbacks,photos,texts
 
 logging.basicConfig(level=logging.INFO,format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+# Prevent httpx INFO logs from printing Telegram bot-token URLs.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 def main():
     s=load_settings()
