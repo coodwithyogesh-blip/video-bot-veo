@@ -1,4 +1,4 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update
 from telegram.ext import ContextTypes
 
 from config import Settings, is_owner
@@ -29,9 +29,8 @@ async def owner_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             await update.effective_message.reply_text("Access denied.")
         return
 
-    keyboard = [[InlineKeyboardButton("Owner Settings (setup in next module)", callback_data="owner_settings")]]
     if update.effective_message:
         await update.effective_message.reply_text(
-            "OWNER PANEL — private access confirmed.",
-            reply_markup=InlineKeyboardMarkup(keyboard),
+            "OWNER PANEL — private access confirmed.\n"
+            "Management controls are being added in the next implementation stage."
         )
