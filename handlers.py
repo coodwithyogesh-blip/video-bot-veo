@@ -16,7 +16,10 @@ async def start_command(u,c):
     user=u.effective_user
     if not user or not u.effective_chat: return
     fresh=db(c).ensure_user(user.id,user.username or "",user.first_name or "")
-    if fresh: sheets(c).append("Users",[user.id,user.username or "",user.first_name or "",datetime.now(timezone.utc).isoformat()])
+    if fresh:
+        stamp=datetime.now(timezone.utc).isoformat()
+        sheets(c).append("Users",[user.id,user.username or "",user.first_name or "",stamp])
+        sheets(c).append("Transactions",["",user.id,c.application.bot_data["settings"].welcome_credits,"welcome_bonus",c.application.bot_data["settings"].welcome_credits,stamp])
     credits="Unlimited (Owner)" if owner_ok(u,c) else db(c).get_user(user.id)["credits"]
     kb=[[InlineKeyboardButton("🎬 Short Video",callback_data="duration:short"),InlineKeyboardButton("🎞 2–3 Minute Video",callback_data="duration:long")],
         [InlineKeyboardButton("💳 Buy Subscription",callback_data="buy"),InlineKeyboardButton("👛 My Credits",callback_data="balance")]]
@@ -78,6 +81,24 @@ async def setplan(u,c):
     key="subscription_credits" if u.effective_message.text.startswith("/setsubcredits") else "subscription_days"
     db(c).set_setting(key,c.args[0]); await u.effective_message.reply_text(f"{key} updated.")
 
+async def setgeneral(u,c):
+    if not owner_ok(u,c): return await u.effective_message.reply_text("Access denied.")
+    if len(c.args)!=1 or not c.args[0].isdigit() or int(c.args[0])<1:
+        return await u.effective_message.reply_text("Use /setwelcome 200, /setshortseconds 8, or /setlongminutes 3")
+    cmd=u.effective_message.text.split()[0].split("@")[0]
+    key={" /setwelcome":"welcome_credits","/setwelcome":"welcome_credits",
+         "/setshortseconds":"short_video_seconds","/setlongminutes":"long_video_minutes"}.get(cmd)
+    if not key: return await u.effective_message.reply_text("Unknown setting.")
+    db(c).set_setting(key,c.args[0])
+    await u.effective_message.reply_text(f"{key} updated. Note: welcome credit change applies to new users only.")
+
+async def user_command(u,c):
+    if not owner_ok(u,c): return await u.effective_message.reply_text("Access denied.")
+    if len(c.args)!=1 or not c.args[0].isdigit(): return await u.effective_message.reply_text("Usage: /user TELEGRAM_USER_ID")
+    row=db(c).get_user(int(c.args[0]))
+    if not row: return await u.effective_message.reply_text("User not found.")
+    await u.effective_message.reply_text(f"User: {row['user_id']}\\nUsername: @{row['username']}\\nCredits: {row['credits']}\\nJoined: {row['created_at']}")
+
 async def addcredits(u,c):
     if not owner_ok(u,c): return await u.effective_message.reply_text("Access denied.")
     if len(c.args)!=2: return await u.effective_message.reply_text("Usage: /addcredits USER_ID AMOUNT")
@@ -85,6 +106,7 @@ async def addcredits(u,c):
         uid,amount=int(c.args[0]),int(c.args[1])
         if amount==0: raise ValueError("Amount cannot be zero")
         balance=db(c).change_credits(uid,amount,"owner_adjustment")
+        sheets(c).append("Transactions",["",uid,amount,"owner_adjustment",balance,datetime.now(timezone.utc).isoformat()])
         await u.effective_message.reply_text(f"User {uid}: balance {balance}")
         await c.bot.send_message(uid,f"Owner updated your credits. Balance: {balance}")
     except Exception as e: await u.effective_message.reply_text(f"Error: {e}")
@@ -119,6 +141,9 @@ async def callbacks(u,c):
         p=result["payment"]
         sheets(c).append("Payments",[pid,p["user_id"],p["amount"],"approved" if approved else "rejected",p["proof_file_id"],p["created_at"],datetime.now(timezone.utc).isoformat()])
         if approved:
+            stamp=datetime.now(timezone.utc).isoformat()
+            sheets(c).append("Transactions",["",p["user_id"],result["credits"],"subscription_payment",result["balance"],stamp])
+            sheets(c).append("Subscriptions",["",p["user_id"],"credit_subscription",result["credits"],result["starts_at"],result["expires_at"],pid])
             await c.bot.send_message(p["user_id"],f"Payment approved. {result['credits']} credits added. Balance: {result['balance']}.")
             await q.message.reply_text(f"Approved; {result['credits']} credits granted.")
         else:
@@ -165,11 +190,14 @@ async def texts(u,c):
     try:
         path=await asyncio.to_thread(generate_video,s.gemini_api_key,s.video_model,prompt,seconds,s.video_output_dir)
         db(c).record_video(user.id,prompt,seconds,0 if free else cost,path,"completed")
+        if not free: sheets(c).append("Transactions",["",user.id,-cost,f"video_{mode}",db(c).get_user(user.id)["credits"],datetime.now(timezone.utc).isoformat()])
         sheets(c).append("Videos",[user.id,prompt,seconds,0 if free else cost,path,"completed",datetime.now(timezone.utc).isoformat()])
         with open(path,"rb") as f: await msg.reply_video(video=f,caption="Your video is ready!")
         if not free: await msg.reply_text(f"Remaining credits: {db(c).get_user(user.id)['credits']}")
     except Exception as e:
-        if not free: db(c).change_credits(user.id,cost,"generation_refund")
+        if not free:
+            balance=db(c).change_credits(user.id,cost,"generation_refund")
+            sheets(c).append("Transactions",["",user.id,cost,"generation_refund",balance,datetime.now(timezone.utc).isoformat()])
         db(c).record_video(user.id,prompt,seconds,0 if free else cost,"","failed")
         await msg.reply_text(f"Generation failed; credits refunded. Check Veo access, billing and quota. Error: {str(e)[:250]}")
     finally:
