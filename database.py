@@ -24,8 +24,10 @@ class Database:
             row=c.execute("SELECT user_id FROM users WHERE user_id=?",(uid,)).fetchone()
             if row:
                 c.execute("UPDATE users SET username=?,first_name=? WHERE user_id=?",(username,first,uid)); return False
-            c.execute("INSERT INTO users VALUES(?,?,?,?,?)",(uid,username,first,self.welcome,now()))
-            c.execute("INSERT INTO transactions VALUES(?,?,?,?,?,?)",(uuid.uuid4().hex,uid,self.welcome,"welcome_bonus",self.welcome,now()))
+            welcome_row=c.execute("SELECT value FROM settings WHERE key='welcome_credits'").fetchone()
+            welcome=int(welcome_row["value"]) if welcome_row else self.welcome
+            c.execute("INSERT INTO users VALUES(?,?,?,?,?)",(uid,username,first,welcome,now()))
+            c.execute("INSERT INTO transactions VALUES(?,?,?,?,?,?)",(uuid.uuid4().hex,uid,welcome,"welcome_bonus",welcome,now()))
             return True
     def get_user(self,uid):
         with self.connect() as c:
