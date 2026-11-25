@@ -2,7 +2,8 @@ import os, asyncio
 from datetime import datetime, timezone
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from telegram.error import BadRequest
+from telegram.error import BadRequest, NetworkError
+import logging
 from config import is_owner
 from video_generator import generate_video
 
@@ -130,6 +131,10 @@ async def callbacks(u,c):
     except BadRequest as exc:
         if "too old" not in str(exc).lower() and "query id is invalid" not in str(exc).lower():
             raise
+        logging.warning("Telegram callback expired; continuing callback processing.")
+    except NetworkError as exc:
+        # A temporary Telegram timeout must not prevent the actual button action.
+        logging.warning("Could not acknowledge callback due to network issue; continuing: %s", type(exc).__name__)
     data=q.data or ""
     if data.startswith(("owner:","payok:","payno:")) and not owner_ok(u,c):
         return await q.edit_message_text("Access denied.")
@@ -162,11 +167,24 @@ async def callbacks(u,c):
             stamp=datetime.now(timezone.utc).isoformat()
             sheets(c).append("Transactions",["",p["user_id"],result["credits"],"subscription_payment",result["balance"],stamp])
             sheets(c).append("Subscriptions",["",p["user_id"],"credit_subscription",result["credits"],result["starts_at"],result["expires_at"],pid])
-            await c.bot.send_message(p["user_id"],f"Payment approved. {result['credits']} credits added. Balance: {result['balance']}.")
-            await q.message.reply_text(f"Approved; {result['credits']} credits granted.")
+            notified=True
+            try:
+                await c.bot.send_message(p["user_id"],f"Payment approved. {result['credits']} credits added. Balance: {result['balance']}.")
+            except NetworkError:
+                notified=False
+                logging.warning("Payment %s approved in database, but user notification failed.", pid)
+            await q.message.reply_text(
+                f"Approved; {result['credits']} credits granted. " +
+                ("User notified." if notified else "User notification failed; credits are already added.")
+            )
         else:
-            await c.bot.send_message(p["user_id"],"Payment rejected. Contact owner.")
-            await q.message.reply_text("Payment rejected.")
+            notified=True
+            try:
+                await c.bot.send_message(p["user_id"],"Payment rejected. Contact owner.")
+            except NetworkError:
+                notified=False
+                logging.warning("Payment %s rejected in database, but user notification failed.", pid)
+            await q.message.reply_text("Payment rejected." if notified else "Payment rejected in database; user notification failed.")
 
 async def photos(u,c):
     user=u.effective_user; msg=u.effective_message
